@@ -888,113 +888,115 @@ function WorkspaceOverlay({
 
   return (
     <>
-      {!isRecording ? (
-        <div className="workspace-panel">
+      <div className="workspace-panel">
+        <div className="workspace-panel__topbar">
           <button type="button" className="workspace-panel__toggle" onClick={onTogglePanel}>
             {panelOpen ? 'Hide tools' : 'Show tools'}
           </button>
-
-          {panelOpen ? (
-            <div className="workspace-toolbar workspace-toolbar--panel">
-              <div className="workspace-toolbar__section">
-                <div className="workspace-brand">
-                  <span className="workspace-brand__name">WhiteboardPlus</span>
-                  <span className="workspace-brand__meta">Canvas for code tutorials</span>
-                </div>
-              </div>
-
-              <div className="workspace-toolbar__section">
-                <span className="workspace-toolbar__label">Insert</span>
-                <div className="workspace-toolbar__cluster">
-                  <button type="button" className="app-button app-button--primary" onClick={onAddCodeBlock}>
-                    Code block
-                  </button>
-                  <button type="button" className="app-button" onClick={onAddTable}>
-                    Table
-                  </button>
-                  <button type="button" className="app-button" onClick={onAddStickyNote}>
-                    Sticky note
-                  </button>
-                  <button type="button" className="app-button" onClick={onAddFlowBlock}>
-                    Flow box
-                  </button>
-                  <button type="button" className="app-button" onClick={onAddArrow}>
-                    Arrow
-                  </button>
-                </div>
-              </div>
-
-              <div className="workspace-toolbar__section">
-                <span className="workspace-toolbar__label">Canvas</span>
-                <div className="workspace-toolbar__cluster">
-                  <button type="button" className="app-button" onClick={onToggleGrid}>
-                    {isGridMode ? 'Hide grid' : 'Show grid'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="workspace-toolbar__section">
-                <span className="workspace-toolbar__label">Recording frame</span>
-                <div className="workspace-toolbar__cluster">
-                  <button
-                    type="button"
-                    className={`app-button ${showFrame ? 'app-button--selected' : ''}`}
-                    onClick={onToggleFrameVisibility}
-                  >
-                    {showFrame ? 'Frame on' : 'Frame off'}
-                  </button>
-                  {FRAME_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      className={`app-button ${framePreset.id === preset.id && showFrame ? 'app-button--selected' : ''}`}
-                      onClick={() => onFramePresetChange(preset)}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    className={`app-button ${lockFrameAspectRatio ? 'app-button--selected' : ''}`}
-                    onClick={onToggleFrameAspectRatio}
-                  >
-                    {lockFrameAspectRatio ? 'Lock ratio' : 'Free resize'}
-                  </button>
-                  <button type="button" className="app-button" onClick={onRecenterFrame} disabled={!showFrame}>
-                    Recenter
-                  </button>
-                  <button
-                    type="button"
-                    className="app-button app-button--record"
-                    onClick={showFrame ? onStartRecording : onToggleFrameVisibility}
-                  >
-                    {showFrame ? 'Record frame' : 'Show frame'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="workspace-toolbar__section workspace-toolbar__section--status">
-                <div className="workspace-status">
-                  <span>Tool {currentTool}</span>
-                  <span>Zoom {zoom}%</span>
-                  <span>
-                    Runtime{' '}
-                    {runtime.status === 'ready'
-                      ? 'ready'
-                      : runtime.status === 'error'
-                        ? 'failed'
-                        : 'loading'}
-                  </span>
-                </div>
-              </div>
-            </div>
+          {isRecording ? (
+            <button type="button" className="recording-stop" onClick={onStopRecording}>
+              Stop recording
+            </button>
           ) : null}
         </div>
-      ) : (
-        <button type="button" className="recording-stop" onClick={onStopRecording}>
-          Stop recording
-        </button>
-      )}
+
+        {panelOpen ? (
+          <div className="workspace-toolbar workspace-toolbar--panel">
+            <div className="workspace-toolbar__section">
+              <div className="workspace-brand">
+                <span className="workspace-brand__name">WhiteboardPlus</span>
+                <span className="workspace-brand__meta">Canvas for code tutorials</span>
+              </div>
+            </div>
+
+            <div className="workspace-toolbar__section">
+              <span className="workspace-toolbar__label">Insert</span>
+              <div className="workspace-toolbar__cluster">
+                <button type="button" className="app-button app-button--primary" onClick={onAddCodeBlock}>
+                  Code block
+                </button>
+                <button type="button" className="app-button" onClick={onAddTable}>
+                  Table
+                </button>
+                <button type="button" className="app-button" onClick={onAddStickyNote}>
+                  Sticky note
+                </button>
+                <button type="button" className="app-button" onClick={onAddFlowBlock}>
+                  Flow box
+                </button>
+                <button type="button" className="app-button" onClick={onAddArrow}>
+                  Arrow
+                </button>
+              </div>
+            </div>
+
+            <div className="workspace-toolbar__section">
+              <span className="workspace-toolbar__label">Canvas</span>
+              <div className="workspace-toolbar__cluster">
+                <button type="button" className="app-button" onClick={onToggleGrid}>
+                  {isGridMode ? 'Hide grid' : 'Show grid'}
+                </button>
+              </div>
+            </div>
+
+            <div className="workspace-toolbar__section">
+              <span className="workspace-toolbar__label">Recording frame</span>
+              <div className="workspace-toolbar__cluster">
+                <button
+                  type="button"
+                  className={`app-button ${showFrame ? 'app-button--selected' : ''}`}
+                  onClick={onToggleFrameVisibility}
+                >
+                  {showFrame ? 'Frame on' : 'Frame off'}
+                </button>
+                {FRAME_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    className={`app-button ${framePreset.id === preset.id && showFrame ? 'app-button--selected' : ''}`}
+                    onClick={() => onFramePresetChange(preset)}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`app-button ${lockFrameAspectRatio ? 'app-button--selected' : ''}`}
+                  onClick={onToggleFrameAspectRatio}
+                >
+                  {lockFrameAspectRatio ? 'Lock ratio' : 'Free resize'}
+                </button>
+                <button type="button" className="app-button" onClick={onRecenterFrame} disabled={!showFrame}>
+                  Recenter
+                </button>
+                <button
+                  type="button"
+                  className="app-button app-button--record"
+                  onClick={isRecording ? onStopRecording : showFrame ? onStartRecording : onToggleFrameVisibility}
+                >
+                  {isRecording ? 'Stop recording' : showFrame ? 'Record frame' : 'Show frame'}
+                </button>
+              </div>
+            </div>
+
+            <div className="workspace-toolbar__section workspace-toolbar__section--status">
+              <div className="workspace-status">
+                <span>Tool {currentTool}</span>
+                <span>Zoom {zoom}%</span>
+                <span>
+                  Runtime{' '}
+                  {runtime.status === 'ready'
+                    ? 'ready'
+                    : runtime.status === 'error'
+                      ? 'failed'
+                      : 'loading'}
+                </span>
+                <span>Recording {isRecording ? 'on' : 'off'}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {showFrame ? (
         <div className="recording-frame-layer" data-html2canvas-ignore="true">
@@ -1049,6 +1051,7 @@ function App() {
   const runtimeRef = useRef<RuntimeContextValue['runCode']>(async () => undefined)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const recordingMimeTypeRef = useRef('video/webm')
   const recordingLoopRef = useRef<{ active: boolean }>({ active: false })
   const chunksRef = useRef<Blob[]>([])
   const frameInteractionRef = useRef<FrameInteraction | null>(null)
@@ -1333,7 +1336,7 @@ json.dumps({
       props: {
         start: { x: 0, y: 0 },
         end: { x: 220, y: 0 },
-        text: '',
+        richText: toRichText(''),
       },
     } as any)
   }, [])
@@ -1363,27 +1366,35 @@ json.dumps({
 
     await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
 
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : 'video/webm'
+    const mimeType = [
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm',
+    ].find((candidate) => MediaRecorder.isTypeSupported(candidate)) ?? 'video/webm'
 
     const recorder = new MediaRecorder(recorderCanvas.captureStream(10), { mimeType })
     recorderRef.current = recorder
+    recordingMimeTypeRef.current = mimeType
 
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunksRef.current.push(event.data)
     }
 
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/webm' })
+      const actualMimeType = recorder.mimeType || recordingMimeTypeRef.current || 'video/webm'
+      const blob = new Blob(chunksRef.current, { type: actualMimeType })
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `whiteboardplus-${framePreset.label.replace(':', 'x')}.webm`
+      const extension = actualMimeType.includes('mp4') ? 'mp4' : 'webm'
+      anchor.download = `whiteboardplus-${framePreset.label.replace(':', 'x')}.${extension}`
       anchor.click()
       URL.revokeObjectURL(url)
       recorderRef.current = null
       recorderCanvasRef.current = null
+      recordingMimeTypeRef.current = 'video/webm'
     }
 
     recorder.start(250)
@@ -1527,7 +1538,7 @@ json.dumps({
             shapeUtils={[CodeShapeUtil, TableShapeUtil]}
             components={UI_COMPONENTS}
             inferDarkMode={false}
-            hideUi={isRecording}
+            hideUi={false}
             onMount={(editor) => {
               editorRef.current = editor
               editor.updateInstanceState({ isGridMode: true })
