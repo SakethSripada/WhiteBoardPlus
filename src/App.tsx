@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
@@ -23,6 +24,7 @@ import {
   Tldraw,
   type TLUiComponents,
   resizeBox,
+  stopEventPropagation,
   useEditor,
   useValue,
 } from 'tldraw'
@@ -30,6 +32,8 @@ import 'tldraw/tldraw.css'
 import './App.css'
 
 type FramePresetId = 'portrait' | 'landscape' | 'square'
+type FrameResizeHandle = 'nw' | 'ne' | 'se' | 'sw'
+type PyodideStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 type FramePreset = {
   id: FramePresetId
@@ -37,8 +41,6 @@ type FramePreset = {
   width: number
   height: number
 }
-
-type PyodideStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 type RuntimeContextValue = {
   status: PyodideStatus
@@ -72,8 +74,6 @@ type RecordingFrame = {
   width: number
   height: number
 }
-
-type FrameResizeHandle = 'nw' | 'ne' | 'se' | 'sw'
 
 type FrameInteraction =
   | {
@@ -124,7 +124,7 @@ class CodeShapeUtil extends BaseBoxShapeUtil<any> {
   }
 
   override canEdit() {
-    return false
+    return true
   }
 
   override hideResizeHandles() {
@@ -148,8 +148,11 @@ class CodeShapeUtil extends BaseBoxShapeUtil<any> {
 
   override component(shape: CodeShape) {
     return (
-      <HTMLContainer className="code-shape-shell">
-        <CodeShapeCard shape={shape} />
+      <HTMLContainer
+        className="code-shape-shell"
+        style={{ pointerEvents: 'none' }}
+      >
+        <div className="code-shape-proxy" style={{ width: shape.props.w, height: shape.props.h }} />
       </HTMLContainer>
     )
   }
@@ -159,7 +162,17 @@ class CodeShapeUtil extends BaseBoxShapeUtil<any> {
   }
 }
 
-function CodeShapeCard({ shape }: { shape: CodeShape }) {
+function CodeShapeCard({
+  shape,
+  style,
+  onDragStart,
+  onResizeStart,
+}: {
+  shape: CodeShape
+  style?: CSSProperties
+  onDragStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+}) {
   const editor = useEditor()
   const runtime = useContext(RuntimeContext)
   const extensions = useMemo(() => [python()], [])
@@ -182,33 +195,47 @@ function CodeShapeCard({ shape }: { shape: CodeShape }) {
     [editor, shape.id, shape.props],
   )
 
+  const beginEditing = useCallback(() => {
+    editor.select(shape.id as any)
+    editor.setEditingShape(shape.id as any)
+  }, [editor, shape.id])
+
+  const endEditing = useCallback(() => {
+    if (editor.getEditingShapeId() === (shape.id as any)) {
+      editor.setEditingShape(null)
+    }
+  }, [editor, shape.id])
+
   return (
     <div
       className="code-shape"
-      style={{ width: shape.props.w, height: shape.props.h }}
-      onKeyDownCapture={(event) => {
-        if ((event.target as HTMLElement).closest('[data-stop-canvas-shortcuts="true"]')) {
-          event.stopPropagation()
-        }
-      }}
-      onKeyUpCapture={(event) => {
-        if ((event.target as HTMLElement).closest('[data-stop-canvas-shortcuts="true"]')) {
-          event.stopPropagation()
-        }
-      }}
+      style={{ width: shape.props.w, height: shape.props.h, ...style }}
       onPointerDown={(event) => {
         if ((event.target as HTMLElement).closest('[data-stop-canvas-shortcuts="true"]')) {
-          editor.select(shape.id as any)
-          event.stopPropagation()
+          beginEditing()
+          stopEventPropagation(event)
         }
       }}
+      onKeyDownCapture={stopEventPropagation}
+      onKeyUpCapture={stopEventPropagation}
     >
       <div className="code-shape__header">
         <div className="code-shape__meta">
+          {onDragStart ? (
+            <button
+              type="button"
+              className="code-shape__drag-handle"
+              data-stop-canvas-shortcuts="true"
+              onPointerDown={onDragStart}
+              aria-label="Drag code block"
+            />
+          ) : null}
           <input
             data-stop-canvas-shortcuts="true"
             className="code-shape__title"
             value={shape.props.title}
+            onFocus={beginEditing}
+            onBlur={endEditing}
             onChange={(event) => updateProps({ title: event.target.value })}
             aria-label="Code block title"
           />
@@ -218,9 +245,10 @@ function CodeShapeCard({ shape }: { shape: CodeShape }) {
           className="app-button app-button--primary"
           data-stop-canvas-shortcuts="true"
           disabled={runtime.status !== 'ready' || shape.props.isRunning}
+          onMouseDown={stopEventPropagation}
           onClick={() => runtime.runCode(shape.id, shape.props.code)}
         >
-          {shape.props.isRunning ? 'Running…' : 'Run'}
+          {shape.props.isRunning ? 'Running...' : 'Run'}
         </button>
       </div>
 
@@ -236,7 +264,8 @@ function CodeShapeCard({ shape }: { shape: CodeShape }) {
             lineNumbers: true,
           }}
           theme="light"
-          onFocus={() => editor.select(shape.id as any)}
+          onFocus={beginEditing}
+          onBlur={endEditing}
           onChange={(value) => updateProps({ code: value })}
         />
       </div>
@@ -251,11 +280,152 @@ function CodeShapeCard({ shape }: { shape: CodeShape }) {
           </div>
           <pre>
             {shape.props.isRunning
-              ? 'Running Python in the browser…'
+              ? 'Running Python in the browser...'
               : shape.props.error || shape.props.output || 'No output yet.'}
           </pre>
         </div>
       ) : null}
+
+      {onResizeStart ? (
+        <button
+          type="button"
+          className="code-shape__resize-handle"
+          data-stop-canvas-shortcuts="true"
+          onPointerDown={onResizeStart}
+          aria-label="Resize code block"
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function CodeBlocksOverlay() {
+  const editor = useEditor()
+  const interactionRef = useRef<
+    | {
+        kind: 'move'
+        pointerId: number
+        startX: number
+        startY: number
+        shape: CodeShape
+      }
+    | {
+        kind: 'resize'
+        pointerId: number
+        startX: number
+        startY: number
+        shape: CodeShape
+      }
+    | null
+  >(null)
+
+  const codeShapes = useValue(
+    'code-shape-overlays',
+    () => {
+      editor.getZoomLevel()
+      editor.getViewportPageBounds()
+      return (editor.getCurrentPageShapes() as any[])
+        .filter((shape) => shape.type === 'code')
+        .map((shape) => {
+          const codeShape = shape as CodeShape
+          const screenPoint = editor.pageToScreen({ x: codeShape.x, y: codeShape.y })
+          const zoom = editor.getZoomLevel()
+
+          return {
+            shape: codeShape,
+            screenStyle: {
+              left: screenPoint.x,
+              top: screenPoint.y,
+              width: codeShape.props.w,
+              height: codeShape.props.h,
+              transform: `scale(${zoom})`,
+              transformOrigin: 'top left',
+            } as CSSProperties,
+          }
+        })
+    },
+    [editor],
+  )
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const interaction = interactionRef.current
+      if (!interaction || interaction.pointerId !== event.pointerId) return
+
+      const zoom = editor.getZoomLevel()
+      const dx = (event.clientX - interaction.startX) / zoom
+      const dy = (event.clientY - interaction.startY) / zoom
+
+      if (interaction.kind === 'move') {
+        editor.updateShape({
+          id: interaction.shape.id,
+          type: 'code',
+          x: interaction.shape.x + dx,
+          y: interaction.shape.y + dy,
+          props: interaction.shape.props,
+        } as any)
+        return
+      }
+
+      editor.updateShape({
+        id: interaction.shape.id,
+        type: 'code',
+        x: interaction.shape.x,
+        y: interaction.shape.y,
+        props: {
+          ...interaction.shape.props,
+          w: Math.max(340, interaction.shape.props.w + dx),
+          h: Math.max(220, interaction.shape.props.h + dy),
+        },
+      } as any)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (interactionRef.current?.pointerId === event.pointerId) {
+        interactionRef.current = null
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [editor])
+
+  return (
+    <div className="code-blocks-overlay">
+      {codeShapes.map(({ shape, screenStyle }) => (
+        <CodeShapeCard
+          key={shape.id}
+          shape={shape}
+          style={screenStyle}
+          onDragStart={(event) => {
+            event.preventDefault()
+            stopEventPropagation(event)
+            interactionRef.current = {
+              kind: 'move',
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              shape,
+            }
+          }}
+          onResizeStart={(event) => {
+            event.preventDefault()
+            stopEventPropagation(event)
+            interactionRef.current = {
+              kind: 'resize',
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              shape,
+            }
+          }}
+        />
+      ))}
     </div>
   )
 }
@@ -273,11 +443,13 @@ function WorkspaceOverlay({
   frame,
   showFrame,
   isRecording,
+  panelOpen,
   lockFrameAspectRatio,
   onToggleGrid,
   onAddCodeBlock,
   onToggleFrameVisibility,
   onToggleFrameAspectRatio,
+  onTogglePanel,
   onFramePresetChange,
   onStartRecording,
   onStopRecording,
@@ -289,17 +461,19 @@ function WorkspaceOverlay({
   frame: RecordingFrame
   showFrame: boolean
   isRecording: boolean
+  panelOpen: boolean
   lockFrameAspectRatio: boolean
   onToggleGrid: () => void
   onAddCodeBlock: () => void
   onToggleFrameVisibility: () => void
   onToggleFrameAspectRatio: () => void
+  onTogglePanel: () => void
   onFramePresetChange: (preset: FramePreset) => void
   onStartRecording: () => void
   onStopRecording: () => void
   onRecenterFrame: () => void
-  onFrameDragStart: (event: React.PointerEvent<HTMLDivElement>) => void
-  onFrameResizeStart: (handle: FrameResizeHandle, event: React.PointerEvent<HTMLButtonElement>) => void
+  onFrameDragStart: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onFrameResizeStart: (handle: FrameResizeHandle, event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const editor = useEditor()
   const runtime = useContext(RuntimeContext)
@@ -310,94 +484,100 @@ function WorkspaceOverlay({
   return (
     <>
       {!isRecording ? (
-        <div className="workspace-toolbar workspace-toolbar--panel">
-          <div className="workspace-toolbar__section">
-            <div className="workspace-brand">
-              <span className="workspace-brand__name">WhiteboardPlus</span>
-              <span className="workspace-brand__meta">Canvas for code tutorials</span>
-            </div>
-          </div>
+        <div className="workspace-panel">
+          <button type="button" className="workspace-panel__toggle" onClick={onTogglePanel}>
+            {panelOpen ? 'Hide tools' : 'Show tools'}
+          </button>
 
-          <div className="workspace-toolbar__section">
-            <span className="workspace-toolbar__label">Insert</span>
-            <div className="workspace-toolbar__cluster">
-              <button type="button" className="app-button app-button--primary" onClick={onAddCodeBlock}>
-                Code block
-              </button>
-            </div>
-          </div>
+          {panelOpen ? (
+            <div className="workspace-toolbar workspace-toolbar--panel">
+              <div className="workspace-toolbar__section">
+                <div className="workspace-brand">
+                  <span className="workspace-brand__name">WhiteboardPlus</span>
+                  <span className="workspace-brand__meta">Canvas for code tutorials</span>
+                </div>
+              </div>
 
-          <div className="workspace-toolbar__section">
-            <span className="workspace-toolbar__label">Canvas</span>
-            <div className="workspace-toolbar__cluster">
-              <button type="button" className="app-button" onClick={onToggleGrid}>
-                {isGridMode ? 'Hide grid' : 'Show grid'}
-              </button>
-            </div>
-          </div>
+              <div className="workspace-toolbar__section">
+                <span className="workspace-toolbar__label">Insert</span>
+                <div className="workspace-toolbar__cluster">
+                  <button type="button" className="app-button app-button--primary" onClick={onAddCodeBlock}>
+                    Code block
+                  </button>
+                </div>
+              </div>
 
-          <div className="workspace-toolbar__section">
-            <span className="workspace-toolbar__label">Recording frame</span>
-            <div className="workspace-toolbar__cluster">
-              <button
-                type="button"
-                className={`app-button ${showFrame ? 'app-button--selected' : ''}`}
-                onClick={onToggleFrameVisibility}
-              >
-                {showFrame ? 'Frame on' : 'Frame off'}
-              </button>
-              {FRAME_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  className={`app-button ${framePreset.id === preset.id && showFrame ? 'app-button--selected' : ''}`}
-                  onClick={() => onFramePresetChange(preset)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`app-button ${lockFrameAspectRatio ? 'app-button--selected' : ''}`}
-                onClick={onToggleFrameAspectRatio}
-              >
-                {lockFrameAspectRatio ? 'Lock ratio' : 'Free resize'}
-              </button>
-              <button type="button" className="app-button" onClick={onRecenterFrame} disabled={!showFrame}>
-                Recenter
-              </button>
-              <button
-                type="button"
-                className="app-button app-button--record"
-                onClick={showFrame ? onStartRecording : onToggleFrameVisibility}
-              >
-                {showFrame ? 'Record frame' : 'Show frame'}
-              </button>
-            </div>
-          </div>
+              <div className="workspace-toolbar__section">
+                <span className="workspace-toolbar__label">Canvas</span>
+                <div className="workspace-toolbar__cluster">
+                  <button type="button" className="app-button" onClick={onToggleGrid}>
+                    {isGridMode ? 'Hide grid' : 'Show grid'}
+                  </button>
+                </div>
+              </div>
 
-          <div className="workspace-toolbar__section workspace-toolbar__section--status">
-            <div className="workspace-status">
-              <span>Tool {currentTool}</span>
-              <span>Zoom {zoom}%</span>
-              <span>
-                Runtime{' '}
-                {runtime.status === 'ready'
-                  ? 'ready'
-                  : runtime.status === 'error'
-                    ? 'failed'
-                    : 'loading'}
-              </span>
+              <div className="workspace-toolbar__section">
+                <span className="workspace-toolbar__label">Recording frame</span>
+                <div className="workspace-toolbar__cluster">
+                  <button
+                    type="button"
+                    className={`app-button ${showFrame ? 'app-button--selected' : ''}`}
+                    onClick={onToggleFrameVisibility}
+                  >
+                    {showFrame ? 'Frame on' : 'Frame off'}
+                  </button>
+                  {FRAME_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`app-button ${framePreset.id === preset.id && showFrame ? 'app-button--selected' : ''}`}
+                      onClick={() => onFramePresetChange(preset)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={`app-button ${lockFrameAspectRatio ? 'app-button--selected' : ''}`}
+                    onClick={onToggleFrameAspectRatio}
+                  >
+                    {lockFrameAspectRatio ? 'Lock ratio' : 'Free resize'}
+                  </button>
+                  <button type="button" className="app-button" onClick={onRecenterFrame} disabled={!showFrame}>
+                    Recenter
+                  </button>
+                  <button
+                    type="button"
+                    className="app-button app-button--record"
+                    onClick={showFrame ? onStartRecording : onToggleFrameVisibility}
+                  >
+                    {showFrame ? 'Record frame' : 'Show frame'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="workspace-toolbar__section workspace-toolbar__section--status">
+                <div className="workspace-status">
+                  <span>Tool {currentTool}</span>
+                  <span>Zoom {zoom}%</span>
+                  <span>
+                    Runtime{' '}
+                    {runtime.status === 'ready'
+                      ? 'ready'
+                      : runtime.status === 'error'
+                        ? 'failed'
+                        : 'loading'}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
-      ) : null}
-
-      {isRecording ? (
+      ) : (
         <button type="button" className="recording-stop" onClick={onStopRecording}>
           Stop recording
         </button>
-      ) : null}
+      )}
 
       {showFrame ? (
         <div className="recording-frame-layer" data-html2canvas-ignore="true">
@@ -459,9 +639,10 @@ function App() {
   const [runtimeStatus, setRuntimeStatus] = useState<PyodideStatus>('loading')
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [framePreset, setFramePreset] = useState<FramePreset>(FRAME_PRESETS[0])
-  const [frame, setFrame] = useState<RecordingFrame>({ x: 80, y: 80, width: 405, height: 720 })
+  const [frame, setFrame] = useState<RecordingFrame>({ x: 80, y: 110, width: 405, height: 720 })
   const [showFrame, setShowFrame] = useState(true)
   const [lockFrameAspectRatio, setLockFrameAspectRatio] = useState(true)
+  const [panelOpen, setPanelOpen] = useState(true)
   const [isRecording, setIsRecording] = useState(false)
 
   const clampFrame = useCallback((next: RecordingFrame) => {
@@ -478,7 +659,7 @@ function App() {
       width,
       height,
       x: Math.min(Math.max(0, next.x), maxX),
-      y: Math.min(Math.max(0, next.y), maxY),
+      y: Math.min(Math.max(60, next.y), Math.max(60, maxY)),
     }
   }, [])
 
@@ -488,7 +669,7 @@ function App() {
       if (!bounds) return
 
       const usableWidth = bounds.width * 0.42
-      const usableHeight = bounds.height * 0.74
+      const usableHeight = bounds.height * 0.7
       const ratio = preset.width / preset.height
 
       let width = usableWidth
@@ -501,7 +682,7 @@ function App() {
 
       setFrame({
         x: (bounds.width - width) / 2,
-        y: (bounds.height - height) / 2,
+        y: Math.max(96, (bounds.height - height) / 2),
         width,
         height,
       })
@@ -510,16 +691,52 @@ function App() {
   )
 
   useEffect(() => {
-    if (showFrame) {
+    if (showFrame && lockFrameAspectRatio) {
       fitFrameToWorkspace(framePreset)
     }
-  }, [fitFrameToWorkspace, framePreset, showFrame])
+  }, [fitFrameToWorkspace, framePreset, lockFrameAspectRatio, showFrame])
 
   useEffect(() => {
-    const handleResize = () => fitFrameToWorkspace(framePreset)
+    const handleResize = () => {
+      if (showFrame && lockFrameAspectRatio) {
+        fitFrameToWorkspace(framePreset)
+      } else {
+        setFrame((current) => clampFrame(current))
+      }
+    }
+
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [fitFrameToWorkspace, framePreset])
+  }, [clampFrame, fitFrameToWorkspace, framePreset, lockFrameAspectRatio, showFrame])
+
+  useEffect(() => {
+    const shouldOwnKeyboard = () => {
+      const active = document.activeElement as HTMLElement | null
+      return Boolean(active?.closest('[data-stop-canvas-shortcuts="true"]'))
+    }
+
+    const stopCanvasShortcuts = (event: KeyboardEvent) => {
+      if (!shouldOwnKeyboard()) return
+
+      event.stopPropagation()
+
+      const nativeEvent = event as KeyboardEvent & {
+        stopImmediatePropagation?: () => void
+      }
+
+      nativeEvent.stopImmediatePropagation?.()
+    }
+
+    document.addEventListener('keydown', stopCanvasShortcuts, true)
+    document.addEventListener('keyup', stopCanvasShortcuts, true)
+    document.addEventListener('keypress', stopCanvasShortcuts, true)
+
+    return () => {
+      document.removeEventListener('keydown', stopCanvasShortcuts, true)
+      document.removeEventListener('keyup', stopCanvasShortcuts, true)
+      document.removeEventListener('keypress', stopCanvasShortcuts, true)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -528,7 +745,7 @@ function App() {
       try {
         setRuntimeStatus('loading')
         const pyodide = await loadPyodide({
-          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.28.3/full/',
+          indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/',
         })
         if (cancelled) return
         pyodideRef.current = pyodide
@@ -541,7 +758,6 @@ function App() {
     }
 
     void bootPyodide()
-
     return () => {
       cancelled = true
     }
@@ -550,7 +766,6 @@ function App() {
   const runCode = useCallback(async (shapeId: string, code: string) => {
     const editor = editorRef.current
     const pyodide = pyodideRef.current
-
     if (!editor || !pyodide) return
 
     const shape = editor.getShape(shapeId as any) as CodeShape | undefined
@@ -745,6 +960,9 @@ json.dumps({
   }, [clampFrame, frame, framePreset.label, isRecording, showFrame])
 
   const handleFrameDragStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement
+    if (target.closest('.recording-frame__handle')) return
+
     event.preventDefault()
     frameInteractionRef.current = {
       kind: 'move',
@@ -775,13 +993,13 @@ json.dumps({
     if (!interaction || interaction.pointerId !== event.pointerId) return
 
     if (interaction.kind === 'move') {
-      const next = clampFrame({
-        ...interaction.originFrame,
-        x: interaction.originFrame.x + (event.clientX - interaction.startX),
-        y: interaction.originFrame.y + (event.clientY - interaction.startY),
-      })
-
-      setFrame(next)
+      setFrame(
+        clampFrame({
+          ...interaction.originFrame,
+          x: interaction.originFrame.x + (event.clientX - interaction.startX),
+          y: interaction.originFrame.y + (event.clientY - interaction.startY),
+        }),
+      )
       return
     }
 
@@ -859,16 +1077,19 @@ json.dumps({
               editor.updateInstanceState({ isGridMode: true })
             }}
           >
+            <CodeBlocksOverlay />
             <WorkspaceOverlay
               framePreset={framePreset}
               frame={frame}
               showFrame={showFrame}
               isRecording={isRecording}
+              panelOpen={panelOpen}
               lockFrameAspectRatio={lockFrameAspectRatio}
               onToggleGrid={toggleGrid}
               onAddCodeBlock={addCodeBlock}
               onToggleFrameVisibility={() => setShowFrame((value) => !value)}
               onToggleFrameAspectRatio={() => setLockFrameAspectRatio((value) => !value)}
+              onTogglePanel={() => setPanelOpen((value) => !value)}
               onFramePresetChange={(preset) => {
                 setFramePreset(preset)
                 setShowFrame(true)
@@ -888,11 +1109,11 @@ json.dumps({
         </div>
 
         <div className="workspace-footer">
-          <span>Draw with tldraw tools, drop Python blocks onto the canvas, and run code inline.</span>
+          <span>Draw diagrams, drop Python blocks, and run code inline on one canvas.</span>
           <span>
             {runtimeStatus === 'error'
               ? runtimeError
-              : 'Recording exports the visible frame only and hides the editor chrome.'}
+              : 'The recording frame can be hidden, dragged, resized, and recorded on demand.'}
           </span>
         </div>
       </div>
