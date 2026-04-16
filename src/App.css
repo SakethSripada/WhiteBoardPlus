@@ -368,6 +368,119 @@
   padding: 0;
 }
 
+.table-shape-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.table-shape-proxy {
+  border-radius: 18px;
+  border: 1px dashed rgba(162, 156, 145, 0.5);
+  background:
+    linear-gradient(180deg, rgba(246, 242, 235, 0.86), rgba(252, 251, 247, 0.92));
+}
+
+.table-shape {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(194, 187, 175, 0.95);
+  border-radius: 18px;
+  background: rgba(252, 251, 247, 0.99);
+  box-shadow: 0 14px 28px rgba(31, 34, 36, 0.14);
+  color: var(--text-strong);
+  position: absolute;
+  pointer-events: auto;
+}
+
+.table-shape__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(224, 218, 208, 0.95);
+  background: rgba(246, 242, 235, 0.96);
+  cursor: grab;
+}
+
+.table-shape__title {
+  min-width: 0;
+  width: 220px;
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.table-shape__title:focus {
+  outline: none;
+  cursor: text;
+}
+
+.table-shape__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.table-shape__scroller {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.table-shape__grid {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+}
+
+.table-shape__grid th,
+.table-shape__grid td {
+  border: 1px solid rgba(214, 207, 195, 0.95);
+  background: #fffdfa;
+  vertical-align: top;
+}
+
+.table-shape__cell {
+  width: 100%;
+  min-width: 120px;
+  border: 0;
+  resize: none;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.table-shape__cell:focus {
+  outline: none;
+  background: rgba(245, 241, 232, 0.8);
+}
+
+.table-shape__cell--header {
+  font-weight: 700;
+  color: #52473c;
+}
+
+.table-shape__resize-handle {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 4px;
+  background: #c8c0b3;
+  cursor: nwse-resize;
+  padding: 0;
+}
+
 .workspace-footer {
   display: flex;
   justify-content: space-between;

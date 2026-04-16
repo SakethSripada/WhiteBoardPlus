@@ -31,6 +31,7 @@ import {
   Rectangle2d,
   Tldraw,
   type TLUiComponents,
+  toRichText,
   resizeBox,
   stopEventPropagation,
   useEditor,
@@ -76,6 +77,24 @@ type CodeShape = {
   props: CodeShapeProps
 }
 
+type TableShapeProps = {
+  w: number
+  h: number
+  title: string
+  headers: string[]
+  rows: string[][]
+}
+
+type TableShape = {
+  id: string
+  type: 'table'
+  x: number
+  y: number
+  rotation: number
+  index: string
+  props: TableShapeProps
+}
+
 type RecordingFrame = {
   x: number
   y: number
@@ -109,6 +128,12 @@ const FRAME_PRESETS: FramePreset[] = [
 ]
 
 const DEFAULT_CODE = `print("WhiteboardPlus ready")\n\nfor step in range(1, 4):\n    print(f"Step {step}: draw, explain, run")`
+const DEFAULT_TABLE_HEADERS = ['Step', 'Owner', 'Status']
+const DEFAULT_TABLE_ROWS = [
+  ['Design canvas flow', 'You', 'In progress'],
+  ['Write example code', 'Pairing', 'Queued'],
+  ['Record tutorial clip', 'Whiteboard', 'Next'],
+]
 
 const RuntimeContext = createContext<RuntimeContextValue>({
   status: 'idle',
@@ -166,6 +191,58 @@ class CodeShapeUtil extends BaseBoxShapeUtil<any> {
   }
 
   override indicator(shape: CodeShape) {
+    return <rect width={shape.props.w} height={shape.props.h} rx={18} ry={18} />
+  }
+}
+
+class TableShapeUtil extends BaseBoxShapeUtil<any> {
+  static override type = 'table' as const
+
+  override getDefaultProps(): TableShapeProps {
+    return {
+      w: 520,
+      h: 260,
+      title: 'Planning table',
+      headers: DEFAULT_TABLE_HEADERS,
+      rows: DEFAULT_TABLE_ROWS,
+    }
+  }
+
+  override canEdit() {
+    return true
+  }
+
+  override hideResizeHandles() {
+    return false
+  }
+
+  override getGeometry(shape: TableShape) {
+    return new Rectangle2d({
+      width: shape.props.w,
+      height: shape.props.h,
+      isFilled: true,
+    })
+  }
+
+  override onResize(shape: TableShape, info: Parameters<typeof resizeBox>[1]) {
+    return resizeBox(shape as any, info, {
+      minWidth: 360,
+      minHeight: 220,
+    })
+  }
+
+  override component(shape: TableShape) {
+    return (
+      <HTMLContainer
+        className="table-shape-shell"
+        style={{ pointerEvents: 'none' }}
+      >
+        <div className="table-shape-proxy" style={{ width: shape.props.w, height: shape.props.h }} />
+      </HTMLContainer>
+    )
+  }
+
+  override indicator(shape: TableShape) {
     return <rect width={shape.props.w} height={shape.props.h} rx={18} ry={18} />
   }
 }
@@ -321,6 +398,173 @@ function CodeShapeCard({
   )
 }
 
+function TableShapeCard({
+  shape,
+  style,
+  onDragStart,
+  onResizeStart,
+}: {
+  shape: TableShape
+  style?: CSSProperties
+  onDragStart?: (event: ReactPointerEvent<HTMLElement>) => void
+  onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+}) {
+  const editor = useEditor()
+
+  const updateProps = useCallback(
+    (partial: Partial<TableShapeProps>) => {
+      editor.updateShape({
+        id: shape.id,
+        type: 'table',
+        props: {
+          ...shape.props,
+          ...partial,
+        },
+      } as any)
+    },
+    [editor, shape.id, shape.props],
+  )
+
+  const beginEditing = useCallback(() => {
+    editor.select(shape.id as any)
+    editor.setEditingShape(shape.id as any)
+  }, [editor, shape.id])
+
+  const endEditing = useCallback(() => {
+    if (editor.getEditingShapeId() === (shape.id as any)) {
+      editor.setEditingShape(null)
+    }
+  }, [editor, shape.id])
+
+  const updateHeader = useCallback(
+    (index: number, value: string) => {
+      updateProps({
+        headers: shape.props.headers.map((header, headerIndex) => (headerIndex === index ? value : header)),
+      })
+    },
+    [shape.props.headers, updateProps],
+  )
+
+  const updateCell = useCallback(
+    (rowIndex: number, columnIndex: number, value: string) => {
+      updateProps({
+        rows: shape.props.rows.map((row, currentRowIndex) =>
+          currentRowIndex === rowIndex
+            ? row.map((cell, currentColumnIndex) => (currentColumnIndex === columnIndex ? value : cell))
+            : row,
+        ),
+      })
+    },
+    [shape.props.rows, updateProps],
+  )
+
+  const addRow = useCallback(() => {
+    updateProps({
+      rows: [...shape.props.rows, shape.props.headers.map(() => '')],
+    })
+  }, [shape.props.headers, shape.props.rows, updateProps])
+
+  const addColumn = useCallback(() => {
+    const nextColumnIndex = shape.props.headers.length + 1
+    updateProps({
+      headers: [...shape.props.headers, `Column ${nextColumnIndex}`],
+      rows: shape.props.rows.map((row) => [...row, '']),
+    })
+  }, [shape.props.headers, shape.props.rows, updateProps])
+
+  return (
+    <div
+      className="table-shape"
+      style={{ width: shape.props.w, height: shape.props.h, ...style }}
+      onPointerDown={(event) => {
+        if ((event.target as HTMLElement).closest('[data-stop-canvas-shortcuts="true"]')) {
+          beginEditing()
+          stopEventPropagation(event)
+        }
+      }}
+    >
+      <div
+        className="table-shape__header"
+        onPointerDown={(event) => {
+          const target = event.target as HTMLElement
+          if (target.closest('input, button, textarea')) return
+          onDragStart?.(event)
+        }}
+      >
+        <input
+          data-stop-canvas-shortcuts="true"
+          className="table-shape__title"
+          value={shape.props.title}
+          onFocus={beginEditing}
+          onBlur={endEditing}
+          onChange={(event) => updateProps({ title: event.target.value })}
+          aria-label="Table title"
+        />
+        <div className="table-shape__actions">
+          <button type="button" className="app-button" data-stop-canvas-shortcuts="true" onClick={addRow}>
+            Add row
+          </button>
+          <button type="button" className="app-button" data-stop-canvas-shortcuts="true" onClick={addColumn}>
+            Add column
+          </button>
+        </div>
+      </div>
+
+      <div className="table-shape__scroller" data-stop-canvas-shortcuts="true">
+        <table className="table-shape__grid">
+          <thead>
+            <tr>
+              {shape.props.headers.map((header, index) => (
+                <th key={`${shape.id}-header-${index}`}>
+                  <input
+                    data-stop-canvas-shortcuts="true"
+                    className="table-shape__cell table-shape__cell--header"
+                    value={header}
+                    onFocus={beginEditing}
+                    onBlur={endEditing}
+                    onChange={(event) => updateHeader(index, event.target.value)}
+                    aria-label={`Column ${index + 1} heading`}
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {shape.props.rows.map((row, rowIndex) => (
+              <tr key={`${shape.id}-row-${rowIndex}`}>
+                {shape.props.headers.map((_, columnIndex) => (
+                  <td key={`${shape.id}-cell-${rowIndex}-${columnIndex}`}>
+                    <textarea
+                      data-stop-canvas-shortcuts="true"
+                      className="table-shape__cell"
+                      rows={1}
+                      value={row[columnIndex] ?? ''}
+                      onFocus={beginEditing}
+                      onBlur={endEditing}
+                      onChange={(event) => updateCell(rowIndex, columnIndex, event.target.value)}
+                      aria-label={`Row ${rowIndex + 1} column ${columnIndex + 1}`}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {onResizeStart ? (
+        <button
+          type="button"
+          className="table-shape__resize-handle"
+          data-stop-canvas-shortcuts="true"
+          onPointerDown={onResizeStart}
+          aria-label="Resize table"
+        />
+      ) : null}
+    </div>
+  )
+}
+
 function CodeBlocksOverlay() {
   const editor = useEditor()
   const interactionRef = useRef<
@@ -452,6 +696,137 @@ function CodeBlocksOverlay() {
   )
 }
 
+function TableShapesOverlay() {
+  const editor = useEditor()
+  const interactionRef = useRef<
+    | {
+        kind: 'move'
+        pointerId: number
+        startX: number
+        startY: number
+        shape: TableShape
+      }
+    | {
+        kind: 'resize'
+        pointerId: number
+        startX: number
+        startY: number
+        shape: TableShape
+      }
+    | null
+  >(null)
+
+  const tableShapes = useValue(
+    'table-shape-overlays',
+    () => {
+      editor.getZoomLevel()
+      editor.getViewportPageBounds()
+      return (editor.getCurrentPageShapes() as any[])
+        .filter((shape) => shape.type === 'table')
+        .map((shape) => {
+          const tableShape = shape as TableShape
+          const screenPoint = editor.pageToScreen({ x: tableShape.x, y: tableShape.y })
+          const zoom = editor.getZoomLevel()
+
+          return {
+            shape: tableShape,
+            screenStyle: {
+              left: screenPoint.x,
+              top: screenPoint.y,
+              width: tableShape.props.w,
+              height: tableShape.props.h,
+              transform: `scale(${zoom})`,
+              transformOrigin: 'top left',
+            } as CSSProperties,
+          }
+        })
+    },
+    [editor],
+  )
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const interaction = interactionRef.current
+      if (!interaction || interaction.pointerId !== event.pointerId) return
+
+      const zoom = editor.getZoomLevel()
+      const dx = (event.clientX - interaction.startX) / zoom
+      const dy = (event.clientY - interaction.startY) / zoom
+
+      if (interaction.kind === 'move') {
+        editor.updateShape({
+          id: interaction.shape.id,
+          type: 'table',
+          x: interaction.shape.x + dx,
+          y: interaction.shape.y + dy,
+          props: interaction.shape.props,
+        } as any)
+        return
+      }
+
+      editor.updateShape({
+        id: interaction.shape.id,
+        type: 'table',
+        x: interaction.shape.x,
+        y: interaction.shape.y,
+        props: {
+          ...interaction.shape.props,
+          w: Math.max(360, interaction.shape.props.w + dx),
+          h: Math.max(220, interaction.shape.props.h + dy),
+        },
+      } as any)
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (interactionRef.current?.pointerId === event.pointerId) {
+        interactionRef.current = null
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [editor])
+
+  return (
+    <div className="code-blocks-overlay">
+      {tableShapes.map(({ shape, screenStyle }) => (
+        <TableShapeCard
+          key={shape.id}
+          shape={shape}
+          style={screenStyle}
+          onDragStart={(event) => {
+            event.preventDefault()
+            stopEventPropagation(event)
+            interactionRef.current = {
+              kind: 'move',
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              shape,
+            }
+          }}
+          onResizeStart={(event) => {
+            event.preventDefault()
+            stopEventPropagation(event)
+            interactionRef.current = {
+              kind: 'resize',
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              shape,
+            }
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 const UI_COMPONENTS: TLUiComponents = {
   MainMenu: null,
   SharePanel: null,
@@ -469,6 +844,10 @@ function WorkspaceOverlay({
   lockFrameAspectRatio,
   onToggleGrid,
   onAddCodeBlock,
+  onAddTable,
+  onAddStickyNote,
+  onAddFlowBlock,
+  onAddArrow,
   onToggleFrameVisibility,
   onToggleFrameAspectRatio,
   onTogglePanel,
@@ -487,6 +866,10 @@ function WorkspaceOverlay({
   lockFrameAspectRatio: boolean
   onToggleGrid: () => void
   onAddCodeBlock: () => void
+  onAddTable: () => void
+  onAddStickyNote: () => void
+  onAddFlowBlock: () => void
+  onAddArrow: () => void
   onToggleFrameVisibility: () => void
   onToggleFrameAspectRatio: () => void
   onTogglePanel: () => void
@@ -525,6 +908,18 @@ function WorkspaceOverlay({
                 <div className="workspace-toolbar__cluster">
                   <button type="button" className="app-button app-button--primary" onClick={onAddCodeBlock}>
                     Code block
+                  </button>
+                  <button type="button" className="app-button" onClick={onAddTable}>
+                    Table
+                  </button>
+                  <button type="button" className="app-button" onClick={onAddStickyNote}>
+                    Sticky note
+                  </button>
+                  <button type="button" className="app-button" onClick={onAddFlowBlock}>
+                    Flow box
+                  </button>
+                  <button type="button" className="app-button" onClick={onAddArrow}>
+                    Arrow
                   </button>
                 </div>
               </div>
@@ -874,6 +1269,75 @@ json.dumps({
     } as any)
   }, [])
 
+  const addTable = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const center = editor.getViewportPageBounds().center
+    editor.createShape({
+      type: 'table',
+      x: center.x - 260,
+      y: center.y - 130,
+      props: {
+        w: 520,
+        h: 260,
+        title: 'Planning table',
+        headers: DEFAULT_TABLE_HEADERS,
+        rows: DEFAULT_TABLE_ROWS,
+      },
+    } as any)
+  }, [])
+
+  const addStickyNote = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const center = editor.getViewportPageBounds().center
+    editor.createShape({
+      type: 'note',
+      x: center.x - 90,
+      y: center.y - 90,
+      props: {
+        richText: toRichText('Add takeaways, reminders, or narration beats'),
+      },
+    } as any)
+  }, [])
+
+  const addFlowBlock = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const center = editor.getViewportPageBounds().center
+    editor.createShape({
+      type: 'geo',
+      x: center.x - 120,
+      y: center.y - 60,
+      props: {
+        geo: 'rectangle',
+        w: 240,
+        h: 120,
+        richText: toRichText('Explain this step'),
+      },
+    } as any)
+  }, [])
+
+  const addArrow = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const center = editor.getViewportPageBounds().center
+    editor.createShape({
+      type: 'arrow',
+      x: center.x - 10,
+      y: center.y - 10,
+      props: {
+        start: { x: 0, y: 0 },
+        end: { x: 220, y: 0 },
+        text: '',
+      },
+    } as any)
+  }, [])
+
   const stopRecording = useCallback(() => {
     recordingLoopRef.current.active = false
     recorderRef.current?.stop()
@@ -1060,7 +1524,7 @@ json.dumps({
       <div className="app-shell">
         <div className="workspace" ref={workspaceRef}>
           <Tldraw
-            shapeUtils={[CodeShapeUtil]}
+            shapeUtils={[CodeShapeUtil, TableShapeUtil]}
             components={UI_COMPONENTS}
             inferDarkMode={false}
             hideUi={isRecording}
@@ -1087,6 +1551,7 @@ json.dumps({
             }}
           >
             <CodeBlocksOverlay />
+            <TableShapesOverlay />
             <WorkspaceOverlay
               framePreset={framePreset}
               frame={frame}
@@ -1096,6 +1561,10 @@ json.dumps({
               lockFrameAspectRatio={lockFrameAspectRatio}
               onToggleGrid={toggleGrid}
               onAddCodeBlock={addCodeBlock}
+              onAddTable={addTable}
+              onAddStickyNote={addStickyNote}
+              onAddFlowBlock={addFlowBlock}
+              onAddArrow={addArrow}
               onToggleFrameVisibility={() => setShowFrame((value) => !value)}
               onToggleFrameAspectRatio={() => setLockFrameAspectRatio((value) => !value)}
               onTogglePanel={() => setPanelOpen((value) => !value)}
