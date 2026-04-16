@@ -1,0 +1,48 @@
+:root {
+  color-scheme: light;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --app-bg: #ebe7de;
+  --panel-bg: rgba(255, 252, 246, 0.88);
+  --panel-border: rgba(201, 193, 179, 0.86);
+  --panel-shadow: 0 12px 30px rgba(41, 45, 48, 0.1);
+  --button-bg: rgba(255, 253, 249, 0.96);
+  --button-hover: rgba(244, 239, 230, 0.96);
+  --button-border: rgba(198, 189, 175, 0.92);
+  --button-border-strong: rgba(154, 145, 129, 0.92);
+  --accent: #2f5d50;
+  --accent-strong: #23473d;
+  --accent-soft: rgba(47, 93, 80, 0.12);
+  --text-strong: #181c1f;
+  --text-muted: #5f656b;
+  --mono-font: 'IBM Plex Mono', 'Cascadia Code', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--text-strong);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
