@@ -279,6 +279,7 @@
   padding: 10px 12px;
   border-bottom: 1px solid rgba(224, 218, 208, 0.95);
   background: rgba(246, 242, 235, 0.96);
+  cursor: grab;
 }
 
 .code-shape__meta {
@@ -286,17 +287,6 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-}
-
-.code-shape__drag-handle {
-  width: 14px;
-  height: 14px;
-  border: 0;
-  border-radius: 999px;
-  background: #c8c0b3;
-  box-shadow: inset 0 0 0 1px rgba(89, 83, 73, 0.18);
-  cursor: grab;
-  padding: 0;
 }
 
 .code-shape__title {
@@ -312,6 +302,7 @@
 
 .code-shape__title:focus {
   outline: none;
+  cursor: text;
 }
 
 .code-shape__editor {

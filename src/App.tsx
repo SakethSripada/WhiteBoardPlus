@@ -10,9 +10,17 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
+import { indentWithTab } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
 import html2canvas from 'html2canvas'
 import { loadPyodide } from 'pyodide'
+import {
+  indentUnit,
+} from '@codemirror/language'
+import {
+  type EditorView,
+  keymap,
+} from '@codemirror/view'
 import {
   BaseBoxShapeUtil,
   DefaultNavigationPanel,
@@ -170,12 +178,16 @@ function CodeShapeCard({
 }: {
   shape: CodeShape
   style?: CSSProperties
-  onDragStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onDragStart?: (event: ReactPointerEvent<HTMLElement>) => void
   onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const editor = useEditor()
   const runtime = useContext(RuntimeContext)
-  const extensions = useMemo(() => [python()], [])
+  const editorViewRef = useRef<EditorView | null>(null)
+  const extensions = useMemo(
+    () => [python(), indentUnit.of('    '), keymap.of([indentWithTab])],
+    [],
+  )
   const outputVisible = Boolean(shape.props.output || shape.props.error || shape.props.isRunning)
   const editorHeight = outputVisible
     ? Math.max(140, shape.props.h - 108)
@@ -216,20 +228,16 @@ function CodeShapeCard({
           stopEventPropagation(event)
         }
       }}
-      onKeyDownCapture={stopEventPropagation}
-      onKeyUpCapture={stopEventPropagation}
     >
-      <div className="code-shape__header">
+      <div
+        className="code-shape__header"
+        onPointerDown={(event) => {
+          const target = event.target as HTMLElement
+          if (target.closest('input, button, .cm-editor')) return
+          onDragStart?.(event)
+        }}
+      >
         <div className="code-shape__meta">
-          {onDragStart ? (
-            <button
-              type="button"
-              className="code-shape__drag-handle"
-              data-stop-canvas-shortcuts="true"
-              onPointerDown={onDragStart}
-              aria-label="Drag code block"
-            />
-          ) : null}
           <input
             data-stop-canvas-shortcuts="true"
             className="code-shape__title"
@@ -252,7 +260,11 @@ function CodeShapeCard({
         </button>
       </div>
 
-      <div className="code-shape__editor" data-stop-canvas-shortcuts="true" style={{ height: editorHeight }}>
+      <div
+        className="code-shape__editor"
+        data-stop-canvas-shortcuts="true"
+        style={{ height: editorHeight }}
+      >
         <CodeMirror
           value={shape.props.code}
           height={`${editorHeight}px`}
@@ -262,8 +274,12 @@ function CodeShapeCard({
             highlightActiveLine: false,
             bracketMatching: true,
             lineNumbers: true,
+            indentOnInput: true,
           }}
           theme="light"
+          onCreateEditor={(view) => {
+            editorViewRef.current = view
+          }}
           onFocus={beginEditing}
           onBlur={endEditing}
           onChange={(value) => updateProps({ code: value })}
@@ -640,9 +656,9 @@ function App() {
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
   const [framePreset, setFramePreset] = useState<FramePreset>(FRAME_PRESETS[0])
   const [frame, setFrame] = useState<RecordingFrame>({ x: 80, y: 110, width: 405, height: 720 })
-  const [showFrame, setShowFrame] = useState(true)
+  const [showFrame, setShowFrame] = useState(false)
   const [lockFrameAspectRatio, setLockFrameAspectRatio] = useState(true)
-  const [panelOpen, setPanelOpen] = useState(true)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
 
   const clampFrame = useCallback((next: RecordingFrame) => {
@@ -708,35 +724,6 @@ function App() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [clampFrame, fitFrameToWorkspace, framePreset, lockFrameAspectRatio, showFrame])
-
-  useEffect(() => {
-    const shouldOwnKeyboard = () => {
-      const active = document.activeElement as HTMLElement | null
-      return Boolean(active?.closest('[data-stop-canvas-shortcuts="true"]'))
-    }
-
-    const stopCanvasShortcuts = (event: KeyboardEvent) => {
-      if (!shouldOwnKeyboard()) return
-
-      event.stopPropagation()
-
-      const nativeEvent = event as KeyboardEvent & {
-        stopImmediatePropagation?: () => void
-      }
-
-      nativeEvent.stopImmediatePropagation?.()
-    }
-
-    document.addEventListener('keydown', stopCanvasShortcuts, true)
-    document.addEventListener('keyup', stopCanvasShortcuts, true)
-    document.addEventListener('keypress', stopCanvasShortcuts, true)
-
-    return () => {
-      document.removeEventListener('keydown', stopCanvasShortcuts, true)
-      document.removeEventListener('keyup', stopCanvasShortcuts, true)
-      document.removeEventListener('keypress', stopCanvasShortcuts, true)
-    }
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1069,12 +1056,28 @@ json.dumps({
           <Tldraw
             shapeUtils={[CodeShapeUtil]}
             components={UI_COMPONENTS}
-            persistenceKey="whiteboardplus-canvas"
             inferDarkMode={false}
             hideUi={isRecording}
             onMount={(editor) => {
               editorRef.current = editor
               editor.updateInstanceState({ isGridMode: true })
+              if (!(editor.getCurrentPageShapes() as any[]).some((shape) => shape.type === 'code')) {
+                const center = editor.getViewportPageBounds().center
+                editor.createShape({
+                  type: 'code',
+                  x: center.x - 260,
+                  y: center.y - 180,
+                  props: {
+                    w: 520,
+                    h: 360,
+                    title: 'Python block',
+                    code: DEFAULT_CODE,
+                    output: '',
+                    error: '',
+                    isRunning: false,
+                  },
+                } as any)
+              }
             }}
           >
             <CodeBlocksOverlay />
