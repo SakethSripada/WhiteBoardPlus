@@ -188,10 +188,15 @@ function CodeShapeCard({
     () => [python(), indentUnit.of('    '), keymap.of([indentWithTab])],
     [],
   )
+  const panelChromeHeight = 52
+  const preferredOutputHeight = 96
   const outputVisible = Boolean(shape.props.output || shape.props.error || shape.props.isRunning)
   const editorHeight = outputVisible
-    ? Math.max(140, shape.props.h - 108)
-    : Math.max(180, shape.props.h - 52)
+    ? Math.max(120, shape.props.h - panelChromeHeight - preferredOutputHeight)
+    : Math.max(180, shape.props.h - panelChromeHeight)
+  const outputHeight = outputVisible
+    ? Math.max(72, shape.props.h - panelChromeHeight - editorHeight)
+    : 0
 
   const updateProps = useCallback(
     (partial: Partial<CodeShapeProps>) => {
@@ -290,6 +295,7 @@ function CodeShapeCard({
         <div
           className={`code-shape__output ${shape.props.error ? 'code-shape__output--error' : ''}`}
           data-stop-canvas-shortcuts="true"
+          style={{ height: outputHeight }}
         >
           <div className="code-shape__output-label">
             {shape.props.isRunning ? 'Executing in Pyodide' : shape.props.error ? 'Error' : 'Output'}

@@ -325,9 +325,11 @@
 }
 
 .code-shape__output {
+  min-height: 0;
   padding: 10px 12px 14px;
   border-top: 1px solid rgba(224, 218, 208, 0.95);
   background: #f5f1e8;
+  overflow: auto;
 }
 
 .code-shape__output--error {
