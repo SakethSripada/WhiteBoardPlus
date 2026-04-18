@@ -89,13 +89,15 @@ json.dumps({
       const latestShape = editor.getShape(shapeId as any) as CodeShape | undefined
       if (!latestShape || latestShape.type !== 'code') return
 
+      const output = [parsed.stdout, parsed.stderr].filter(Boolean).join(parsed.stdout && parsed.stderr ? '\n' : '')
+
       editor.updateShape({
         id: shapeId,
         type: 'code',
         props: {
           ...latestShape.props,
           isRunning: false,
-          output: [parsed.stdout, parsed.stderr].filter(Boolean).join(parsed.stdout && parsed.stderr ? '\n' : ''),
+          output: output || 'Code executed successfully, but produced no output.',
           error: parsed.error,
         },
       } as any)

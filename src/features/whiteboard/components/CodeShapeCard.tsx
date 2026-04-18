@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useCallback, useContext, useMemo, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { indentWithTab } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
@@ -21,19 +21,28 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
   const editor = useEditor()
   const runtime = useContext(RuntimeContext)
   const editorViewRef = useRef<EditorView | null>(null)
+  const outputResizeRef = useRef<{
+    pointerId: number
+    startY: number
+    startHeight: number
+  } | null>(null)
   const extensions = useMemo(
     () => [python(), indentUnit.of('    '), keymap.of([indentWithTab])],
     [],
   )
   const panelChromeHeight = 52
-  const preferredOutputHeight = 96
+  const editorMinHeight = 120
+  const outputMinHeight = 72
+  const availableBodyHeight = Math.max(0, shape.props.h - panelChromeHeight)
   const outputVisible = Boolean(shape.props.output || shape.props.error || shape.props.isRunning)
-  const editorHeight = outputVisible
-    ? Math.max(120, shape.props.h - panelChromeHeight - preferredOutputHeight)
-    : Math.max(180, shape.props.h - panelChromeHeight)
+  const maxOutputHeight = Math.max(0, availableBodyHeight - editorMinHeight)
+  const minOutputHeight = Math.min(outputMinHeight, maxOutputHeight)
   const outputHeight = outputVisible
-    ? Math.max(72, shape.props.h - panelChromeHeight - editorHeight)
+    ? Math.min(Math.max(shape.props.outputHeight ?? 96, minOutputHeight), maxOutputHeight)
     : 0
+  const editorHeight = outputVisible
+    ? availableBodyHeight - outputHeight
+    : Math.max(180, availableBodyHeight)
 
   const updateProps = useCallback(
     (partial: Partial<CodeShapeProps>) => {
@@ -59,6 +68,58 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
       editor.setEditingShape(null)
     }
   }, [editor, shape.id])
+
+  const clearOutput = useCallback(() => {
+    updateProps({
+      output: '',
+      error: '',
+      isRunning: false,
+      outputHeight: 96,
+    })
+  }, [updateProps])
+
+  const beginOutputResize = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      outputResizeRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startHeight: outputHeight,
+      }
+      event.currentTarget.setPointerCapture(event.pointerId)
+    },
+    [outputHeight],
+  )
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const interaction = outputResizeRef.current
+      if (!interaction || interaction.pointerId !== event.pointerId) return
+
+      const delta = event.clientY - interaction.startY
+      const nextHeight = Math.min(
+        Math.max(interaction.startHeight - delta, minOutputHeight),
+        maxOutputHeight,
+      )
+
+      updateProps({ outputHeight: nextHeight })
+    }
+
+    const onPointerUp = (event: PointerEvent) => {
+      if (outputResizeRef.current?.pointerId === event.pointerId) {
+        outputResizeRef.current = null
+      }
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [maxOutputHeight, minOutputHeight, updateProps])
 
   return (
     <div
@@ -90,16 +151,28 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
             aria-label="Code block title"
           />
         </div>
-        <button
-          type="button"
-          className="app-button app-button--primary"
-          data-stop-canvas-shortcuts="true"
-          disabled={runtime.status !== 'ready' || shape.props.isRunning}
-          onMouseDown={stopEventPropagation}
-          onClick={() => runtime.runCode(shape.id, shape.props.code)}
-        >
-          {shape.props.isRunning ? 'Running...' : 'Run'}
-        </button>
+        <div className="code-shape__actions">
+          <button
+            type="button"
+            className="app-button"
+            data-stop-canvas-shortcuts="true"
+            disabled={!shape.props.output && !shape.props.error && !shape.props.isRunning}
+            onMouseDown={stopEventPropagation}
+            onClick={clearOutput}
+          >
+            Clear Output
+          </button>
+          <button
+            type="button"
+            className="app-button app-button--primary"
+            data-stop-canvas-shortcuts="true"
+            disabled={runtime.status !== 'ready' || shape.props.isRunning}
+            onMouseDown={stopEventPropagation}
+            onClick={() => runtime.runCode(shape.id, shape.props.code)}
+          >
+            {shape.props.isRunning ? 'Running...' : 'Run'}
+          </button>
+        </div>
       </div>
 
       <div className="code-shape__editor" data-stop-canvas-shortcuts="true" style={{ height: editorHeight }}>
@@ -130,6 +203,13 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
           data-stop-canvas-shortcuts="true"
           style={{ height: outputHeight }}
         >
+          <button
+            type="button"
+            className="code-shape__output-resize-handle"
+            data-stop-canvas-shortcuts="true"
+            onPointerDown={beginOutputResize}
+            aria-label="Resize output area"
+          />
           <div className="code-shape__output-label">
             {shape.props.isRunning ? 'Executing in Pyodide' : shape.props.error ? 'Error' : 'Output'}
           </div>

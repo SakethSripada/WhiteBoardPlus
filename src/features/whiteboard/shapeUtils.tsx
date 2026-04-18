@@ -15,6 +15,10 @@ export class CodeShapeUtil extends BaseBoxShapeUtil<any> {
     return true
   }
 
+  override canScroll() {
+    return true
+  }
+
   override hideResizeHandles() {
     return false
   }
@@ -55,6 +59,10 @@ export class TableShapeUtil extends BaseBoxShapeUtil<any> {
   }
 
   override canEdit() {
+    return true
+  }
+
+  override canScroll() {
     return true
   }
 

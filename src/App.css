@@ -278,6 +278,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: nowrap;
   padding: 10px 12px;
   border-bottom: 1px solid rgba(224, 218, 208, 0.95);
   background: rgba(246, 242, 235, 0.96);
@@ -289,17 +290,32 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.code-shape__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
 }
 
 .code-shape__title {
   min-width: 0;
-  width: 220px;
+  width: clamp(120px, 16vw, 220px);
   border: 0;
   background: transparent;
   color: var(--text-strong);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
+}
+
+.code-shape__actions .app-button {
+  white-space: nowrap;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 .code-shape__title:focus {
@@ -324,9 +340,35 @@
 
 .code-shape__editor .cm-scroller {
   font-family: var(--mono-font);
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(93, 90, 82, 0.45) transparent;
+  scrollbar-gutter: stable;
+}
+
+.code-shape__editor .cm-scroller::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.code-shape__editor .cm-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-shape__editor .cm-scroller::-webkit-scrollbar-thumb {
+  background: rgba(93, 90, 82, 0.45);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.code-shape__editor .cm-scroller::-webkit-scrollbar-thumb:hover {
+  background: rgba(93, 90, 82, 0.62);
+  background-clip: padding-box;
 }
 
 .code-shape__output {
+  position: relative;
   min-height: 0;
   padding: 10px 12px 14px;
   border-top: 1px solid rgba(224, 218, 208, 0.95);
@@ -345,6 +387,35 @@
   text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+
+.code-shape__output-resize-handle {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 52px;
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: ns-resize;
+  padding: 0;
+}
+
+.code-shape__output-resize-handle::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 4px;
+  margin: 2px auto 0;
+  border-radius: 999px;
+  background: rgba(93, 90, 82, 0.35);
+}
+
+.code-shape__output-resize-handle:hover::before,
+.code-shape__output-resize-handle:active::before {
+  background: rgba(93, 90, 82, 0.6);
 }
 
 .code-shape__output pre {

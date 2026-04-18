@@ -23,6 +23,7 @@ export function createDefaultCodeShapeProps(): CodeShapeProps {
     output: '',
     error: '',
     isRunning: false,
+    outputHeight: 96,
   }
 }
 

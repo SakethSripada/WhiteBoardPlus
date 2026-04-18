@@ -23,6 +23,7 @@ export type CodeShapeProps = {
   error: string
   title: string
   isRunning: boolean
+  outputHeight: number
 }
 
 export type CodeShape = {
