@@ -1,6 +1,7 @@
 export type FramePresetId = 'portrait' | 'landscape' | 'square'
 export type FrameResizeHandle = 'nw' | 'ne' | 'se' | 'sw'
 export type PyodideStatus = 'idle' | 'loading' | 'ready' | 'error'
+export type WhiteboardTool = 'select' | 'draw' | 'pan'
 
 export type FramePreset = {
   id: FramePresetId
@@ -12,10 +13,10 @@ export type FramePreset = {
 export type RuntimeContextValue = {
   status: PyodideStatus
   error: string | null
-  runCode: (shapeId: string, code: string) => Promise<void>
+  runCode: (blockId: string, code: string) => Promise<void>
 }
 
-export type CodeShapeProps = {
+export type CodeBlockProps = {
   w: number
   h: number
   code: string
@@ -26,32 +27,11 @@ export type CodeShapeProps = {
   outputHeight: number
 }
 
-export type CodeShape = {
+export type CodeBlock = {
   id: string
-  type: 'code'
   x: number
   y: number
-  rotation: number
-  index: string
-  props: CodeShapeProps
-}
-
-export type TableShapeProps = {
-  w: number
-  h: number
-  title: string
-  headers: string[]
-  rows: string[][]
-}
-
-export type TableShape = {
-  id: string
-  type: 'table'
-  x: number
-  y: number
-  rotation: number
-  index: string
-  props: TableShapeProps
+  props: CodeBlockProps
 }
 
 export type RecordingFrame = {
@@ -77,3 +57,9 @@ export type FrameInteraction =
       originFrame: RecordingFrame
       handle: FrameResizeHandle
     }
+
+export type ViewportState = {
+  zoom: number
+  panX: number
+  panY: number
+}

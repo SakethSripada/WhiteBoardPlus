@@ -1,26 +1,32 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { useCallback, useContext, useEffect, useMemo, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { indentWithTab } from '@codemirror/commands'
 import { python } from '@codemirror/lang-python'
 import { indentUnit } from '@codemirror/language'
-import { type EditorView, keymap } from '@codemirror/view'
-import { stopEventPropagation, useEditor } from 'tldraw'
+import { keymap } from '@codemirror/view'
 import { RuntimeContext } from '../runtime'
-import type { CodeShape, CodeShapeProps } from '../types'
+import type { CodeBlock, CodeBlockProps } from '../types'
 
 type CodeShapeCardProps = {
-  shape: CodeShape
+  block: CodeBlock
   style?: CSSProperties
   onDragStart?: (event: ReactPointerEvent<HTMLElement>) => void
   onResizeStart?: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onUpdateProps: (partial: Partial<CodeBlockProps>) => void
+  onDelete: () => void
+  onFocus: () => void
 }
 
-export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: CodeShapeCardProps) {
-  const editor = useEditor()
+export function CodeShapeCard({
+  block,
+  style,
+  onDragStart,
+  onResizeStart,
+  onUpdateProps,
+  onDelete,
+  onFocus,
+}: CodeShapeCardProps) {
   const runtime = useContext(RuntimeContext)
-  const editorViewRef = useRef<EditorView | null>(null)
   const outputResizeRef = useRef<{
     pointerId: number
     startY: number
@@ -33,41 +39,20 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
   const panelChromeHeight = 52
   const editorMinHeight = 120
   const outputMinHeight = 72
-  const availableBodyHeight = Math.max(0, shape.props.h - panelChromeHeight)
-  const outputVisible = Boolean(shape.props.output || shape.props.error || shape.props.isRunning)
+  const availableBodyHeight = Math.max(0, block.props.h - panelChromeHeight)
+  const outputVisible = Boolean(block.props.output || block.props.error || block.props.isRunning)
   const maxOutputHeight = Math.max(0, availableBodyHeight - editorMinHeight)
   const minOutputHeight = Math.min(outputMinHeight, maxOutputHeight)
   const outputHeight = outputVisible
-    ? Math.min(Math.max(shape.props.outputHeight ?? 96, minOutputHeight), maxOutputHeight)
+    ? Math.min(Math.max(block.props.outputHeight ?? 96, minOutputHeight), maxOutputHeight)
     : 0
   const editorHeight = outputVisible
     ? availableBodyHeight - outputHeight
     : Math.max(180, availableBodyHeight)
 
-  const updateProps = useCallback(
-    (partial: Partial<CodeShapeProps>) => {
-      editor.updateShape({
-        id: shape.id,
-        type: 'code',
-        props: {
-          ...shape.props,
-          ...partial,
-        },
-      } as any)
-    },
-    [editor, shape.id, shape.props],
-  )
-
-  const beginEditing = useCallback(() => {
-    editor.select(shape.id as any)
-    editor.setEditingShape(shape.id as any)
-  }, [editor, shape.id])
-
-  const endEditing = useCallback(() => {
-    if (editor.getEditingShapeId() === (shape.id as any)) {
-      editor.setEditingShape(null)
-    }
-  }, [editor, shape.id])
+  const updateProps = useCallback((partial: Partial<CodeBlockProps>) => {
+    onUpdateProps(partial)
+  }, [onUpdateProps])
 
   const clearOutput = useCallback(() => {
     updateProps({
@@ -82,6 +67,7 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
+      onFocus()
       outputResizeRef.current = {
         pointerId: event.pointerId,
         startY: event.clientY,
@@ -89,7 +75,7 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
       }
       event.currentTarget.setPointerCapture(event.pointerId)
     },
-    [outputHeight],
+    [onFocus, outputHeight],
   )
 
   useEffect(() => {
@@ -124,13 +110,8 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
   return (
     <div
       className="code-shape"
-      style={{ width: shape.props.w, height: shape.props.h, ...style }}
-      onPointerDown={(event) => {
-        if ((event.target as HTMLElement).closest('[data-stop-canvas-shortcuts="true"]')) {
-          beginEditing()
-          stopEventPropagation(event)
-        }
-      }}
+      style={{ width: block.props.w, height: block.props.h, ...style }}
+      onPointerDown={onFocus}
     >
       <div
         className="code-shape__header"
@@ -144,9 +125,7 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
           <input
             data-stop-canvas-shortcuts="true"
             className="code-shape__title"
-            value={shape.props.title}
-            onFocus={beginEditing}
-            onBlur={endEditing}
+            value={block.props.title}
             onChange={(event) => updateProps({ title: event.target.value })}
             aria-label="Code block title"
           />
@@ -156,28 +135,34 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
             type="button"
             className="app-button"
             data-stop-canvas-shortcuts="true"
-            disabled={!shape.props.output && !shape.props.error && !shape.props.isRunning}
-            onMouseDown={stopEventPropagation}
+            disabled={!block.props.output && !block.props.error && !block.props.isRunning}
             onClick={clearOutput}
           >
-            Clear Output
+            Clear
+          </button>
+          <button
+            type="button"
+            className="app-button"
+            data-stop-canvas-shortcuts="true"
+            onClick={onDelete}
+          >
+            Delete
           </button>
           <button
             type="button"
             className="app-button app-button--primary"
             data-stop-canvas-shortcuts="true"
-            disabled={runtime.status !== 'ready' || shape.props.isRunning}
-            onMouseDown={stopEventPropagation}
-            onClick={() => runtime.runCode(shape.id, shape.props.code)}
+            disabled={runtime.status !== 'ready' || block.props.isRunning}
+            onClick={() => runtime.runCode(block.id, block.props.code)}
           >
-            {shape.props.isRunning ? 'Running...' : 'Run'}
+            {block.props.isRunning ? 'Running...' : 'Run'}
           </button>
         </div>
       </div>
 
       <div className="code-shape__editor" data-stop-canvas-shortcuts="true" style={{ height: editorHeight }}>
         <CodeMirror
-          value={shape.props.code}
+          value={block.props.code}
           height={`${editorHeight}px`}
           extensions={extensions}
           basicSetup={{
@@ -188,18 +173,13 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
             indentOnInput: true,
           }}
           theme="light"
-          onCreateEditor={(view) => {
-            editorViewRef.current = view
-          }}
-          onFocus={beginEditing}
-          onBlur={endEditing}
           onChange={(value) => updateProps({ code: value })}
         />
       </div>
 
       {outputVisible ? (
         <div
-          className={`code-shape__output ${shape.props.error ? 'code-shape__output--error' : ''}`}
+          className={`code-shape__output ${block.props.error ? 'code-shape__output--error' : ''}`}
           data-stop-canvas-shortcuts="true"
           style={{ height: outputHeight }}
         >
@@ -211,12 +191,12 @@ export function CodeShapeCard({ shape, style, onDragStart, onResizeStart }: Code
             aria-label="Resize output area"
           />
           <div className="code-shape__output-label">
-            {shape.props.isRunning ? 'Executing in Pyodide' : shape.props.error ? 'Error' : 'Output'}
+            {block.props.isRunning ? 'Executing in Pyodide' : block.props.error ? 'Error' : 'Output'}
           </div>
           <pre>
-            {shape.props.isRunning
+            {block.props.isRunning
               ? 'Running Python in the browser...'
-              : shape.props.error || shape.props.output || 'No output yet.'}
+              : block.props.error || block.props.output || 'No output yet.'}
           </pre>
         </div>
       ) : null}

@@ -1,13 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { loadPyodide } from 'pyodide'
-import type { Editor } from 'tldraw'
-import type { CodeShape, PyodideStatus } from '../types'
+import type { CodeBlock, PyodideStatus } from '../types'
 
 type PyodideInstance = Awaited<ReturnType<typeof loadPyodide>>
 
-export function usePyodideRuntime(editorRef: MutableRefObject<Editor | null>) {
+export function usePyodideRuntime(
+  codeBlocksRef: MutableRefObject<CodeBlock[]>,
+  setCodeBlocks: Dispatch<SetStateAction<CodeBlock[]>>,
+) {
   const pyodideRef = useRef<PyodideInstance | null>(null)
   const [runtimeStatus, setRuntimeStatus] = useState<PyodideStatus>('loading')
   const [runtimeError, setRuntimeError] = useState<string | null>(null)
@@ -37,24 +37,26 @@ export function usePyodideRuntime(editorRef: MutableRefObject<Editor | null>) {
     }
   }, [])
 
-  const runCode = useCallback(async (shapeId: string, code: string) => {
-    const editor = editorRef.current
+  const updateBlock = useCallback((blockId: string, updater: (block: CodeBlock) => CodeBlock) => {
+    setCodeBlocks((current) => current.map((block) => (block.id === blockId ? updater(block) : block)))
+  }, [setCodeBlocks])
+
+  const runCode = useCallback(async (blockId: string, code: string) => {
     const pyodide = pyodideRef.current
-    if (!editor || !pyodide) return
+    if (!pyodide) return
 
-    const shape = editor.getShape(shapeId as any) as CodeShape | undefined
-    if (!shape || shape.type !== 'code') return
+    const block = codeBlocksRef.current.find((candidate) => candidate.id === blockId)
+    if (!block) return
 
-    editor.updateShape({
-      id: shapeId,
-      type: 'code',
+    updateBlock(blockId, (current) => ({
+      ...current,
       props: {
-        ...shape.props,
+        ...current.props,
         isRunning: true,
         output: '',
         error: '',
       },
-    } as any)
+    }))
 
     try {
       const serialized = await pyodide.runPythonAsync(`
@@ -86,36 +88,34 @@ json.dumps({
         error: string
       }
 
-      const latestShape = editor.getShape(shapeId as any) as CodeShape | undefined
-      if (!latestShape || latestShape.type !== 'code') return
+      const latestBlock = codeBlocksRef.current.find((candidate) => candidate.id === blockId)
+      if (!latestBlock) return
 
       const output = [parsed.stdout, parsed.stderr].filter(Boolean).join(parsed.stdout && parsed.stderr ? '\n' : '')
 
-      editor.updateShape({
-        id: shapeId,
-        type: 'code',
+      updateBlock(blockId, (current) => ({
+        ...current,
         props: {
-          ...latestShape.props,
+          ...current.props,
           isRunning: false,
           output: output || 'Code executed successfully, but produced no output.',
           error: parsed.error,
         },
-      } as any)
+      }))
     } catch (error) {
-      const latestShape = editor.getShape(shapeId as any) as CodeShape | undefined
-      if (!latestShape || latestShape.type !== 'code') return
+      const latestBlock = codeBlocksRef.current.find((candidate) => candidate.id === blockId)
+      if (!latestBlock) return
 
-      editor.updateShape({
-        id: shapeId,
-        type: 'code',
+      updateBlock(blockId, (current) => ({
+        ...current,
         props: {
-          ...latestShape.props,
+          ...current.props,
           isRunning: false,
           error: error instanceof Error ? error.message : 'Execution failed.',
         },
-      } as any)
+      }))
     }
-  }, [editorRef])
+  }, [codeBlocksRef, updateBlock])
 
   return {
     runtimeStatus,
