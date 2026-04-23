@@ -876,15 +876,6 @@ function App() {
             />
           </div>
         </div>
-
-        <div className="workspace-footer">
-          <span>Wheel zooms, middle-mouse drag pans, pointer mode edits images, and you can paste or upload images onto the board.</span>
-          <span>
-            {runtimeStatus === 'error'
-              ? runtimeError
-              : 'Undo and redo support Ctrl/Cmd+Z, Ctrl/Cmd+Y, and Ctrl/Cmd+Shift+Z.'}
-          </span>
-        </div>
       </div>
     </RuntimeContext.Provider>
   )
